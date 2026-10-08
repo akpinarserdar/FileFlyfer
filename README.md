@@ -35,7 +35,7 @@ ADB'yi Android Studio'nun SDK Manager bölümünden veya Android SDK Platform-To
 GitHub deposunda **Code → Download ZIP** ile kaynak kodu indirebilir veya **Code** menüsündeki HTTPS adresini kullanabilirsiniz:
 
 ```sh
-git clone <GitHub'daki-depo-HTTPS-adresi>
+git clone https://github.com/akpinarserdar/FileFlyfer.git
 cd FileFlyfer
 ```
 

@@ -35,7 +35,7 @@ Install ADB through Android Studio's SDK Manager or the Android SDK Platform-Too
 On GitHub, choose **Code → Download ZIP** to download the source, or copy the HTTPS URL from the **Code** menu:
 
 ```sh
-git clone <HTTPS-URL-from-the-GitHub-repository>
+git clone https://github.com/akpinarserdar/FileFlyfer.git
 cd FileFlyfer
 ```
 
