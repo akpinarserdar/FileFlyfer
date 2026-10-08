@@ -1,0 +1,4 @@
+Android Debug Bridge (ADB) is part of Android SDK Platform-Tools.
+Copyright (C) The Android Open Source Project.
+Licensed under the Apache License, Version 2.0.
+Production distributions must bundle the complete applicable license text and notices.
