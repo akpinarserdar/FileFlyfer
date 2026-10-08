@@ -1,117 +1,100 @@
 # FileFlyfer
 
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+**Türkçe** | [English](README.en.md)
 
-FileFlyfer, macOS 13+ üzerinde USB ile bağlı Android cihazların ortak depolama alanını ADB üzerinden yöneten bağımsız bir SwiftUI uygulamasıdır. Telefona ek uygulama kurmaz, root erişimi kullanmaz ve dosya içeriğini ağ üzerinden göndermez.
+[![MIT Lisansı](https://img.shields.io/badge/lisans-MIT-blue.svg)](LICENSE) [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black)](#gereksinimler)
+
+FileFlyfer, USB ile bağlanan Android telefonların ortak depolama alanını Mac'ten yönetmek için hazırlanmış ücretsiz ve açık kaynaklı bir macOS uygulamasıdır. Dosya aktarımını Android Debug Bridge (ADB) ile yapar; telefona ek uygulama kurmaz ve root erişimi istemez.
 
 ## Özellikler
 
-- Bağlı, yetkisiz ve çevrimdışı cihazları otomatik algılama; çoklu cihaz seçimi
-- Model, cihaz adı ve Android sürümü bilgisi
-- `/sdcard` altında breadcrumb, sık kullanılan klasörler ve çift tıklamayla gezinme
-- Dosya adı, tür, boyut ve değiştirilme tarihi
-- Tekli/çoklu gönderme ve indirme, sürükle-bırak, sıralı aktarım kuyruğu ve iptal
-- Klasör oluşturma, yeniden adlandırma ve onaylı silme
-- Çakışmada üzerine yazma, atlama veya yeni isim seçeneği
-- Türkçe, Unicode, boşluk, tırnak ve kabuk özel karakterlerini güvenli işleme
-- Kullanıcı dostu merkezi hata eşleme ve gerektiğinde teknik ayrıntıyı saklama
+- Bağlı Android cihazları bulma ve birden fazla cihaz arasında seçim yapma
+- Cihaz modeli, adı ve Android sürümünü görüntüleme
+- `/sdcard` klasörlerinde gezinme, konum yolunu izleme ve klasörleri favorilere ekleme
+- Dosyaları ada, türe, boyuta ve değiştirilme tarihine göre görme
+- Dosyaları Mac ile telefon arasında tek tek veya çoklu aktarma; sürükle ve bırak desteği
+- Sıralı aktarım kuyruğunu iptal etme
+- Telefonda klasör oluşturma, dosya veya klasör adını değiştirme ve onayla silme
+- Aynı adda dosya varsa üzerine yazma, atlama veya yeni ad verme
+- Türkçe karakter ve diğer Unicode dosya adlarını güvenli işleme
 
-ADB yüzde ilerlemesini güvenilir biçimde sağlamadığı için uygulama sahte bir yüzde göstermez; devam eden aktarım belirsiz ilerleme göstergesi kullanır.
+ADB güvenilir bir yüzde bilgisi sağlamadığı için aktarım sırasında sahte yüzde gösterilmez.
 
-## Geliştirme
+## Gereksinimler
 
-Gereksinimler: macOS 13 veya sonrası, Xcode 15 veya sonrası ve Android SDK Platform-Tools (ADB).
+- macOS 13 veya sonrası
+- Xcode 15 veya sonrası (Xcode projesiyle çalıştırmak için)
+- Swift 6 araç zinciri (Swift Package Manager ile derlemek için)
+- Android SDK Platform-Tools içindeki `adb`
+- USB hata ayıklaması açık ve kilidi açılmış bir Android cihaz
 
-```sh
-open Package.swift
-swift test
-swift run FileFlyfer
-```
+ADB'yi Android Studio'nun SDK Manager bölümünden veya Android SDK Platform-Tools paketinden yükleyin. Uygulama ADB'yi `ADB_PATH`, yaygın Homebrew yolları ve `~/Library/Android/sdk/platform-tools/adb` konumlarında arar. ADB farklı bir yerdeyse yolunu `ADB_PATH` ile belirtebilirsiniz.
 
-Android SDK Platform-Tools'u Android Studio'nun SDK Manager'ından veya `sdkmanager` ile yükleyin. Uygulama ADB'yi sırasıyla paket kaynağında, `ADB_PATH` ortam değişkeninde, Homebrew yollarında ve `~/Library/Android/sdk/platform-tools/adb` altında arar. Örnek:
+## İndirip çalıştırma
 
-```sh
-ADB_PATH="$HOME/Library/Android/sdk/platform-tools/adb" swift run FileFlyfer
-```
-
-## Xcode'da açma
-
-`Package.swift` dosyasını Xcode ile açmak geliştirme ve çalıştırma içindir:
+GitHub deposunda **Code → Download ZIP** ile kaynak kodu indirebilir veya **Code** menüsündeki HTTPS adresini kullanabilirsiniz:
 
 ```sh
-open -a Xcode Package.swift
+git clone <GitHub'daki-depo-HTTPS-adresi>
+cd FileFlyfer
 ```
 
-App Store veya imzalı `.app` üretmek için Xcode'da gerçek bir macOS App projesi oluşturun:
-
-Depodaki hazır Xcode projesini açıp çalıştırabilirsiniz:
+Xcode projesini açın, `FileFlyfer` şemasını seçin ve **Run** düğmesine basın:
 
 ```sh
 open FileFlyferXcode/FileFlyferXcode.xcodeproj
 ```
 
-İmzalı dağıtım için Xcode'da Target > Signing & Capabilities bölümünde kendi Team'inizi seçin. Apple Developer hesabı gerekir.
+Xcode ilk açılışta geliştirme için yerel imza ayarlamanızı isteyebilir. ADB kurulu değilse telefon bulunamaz; yukarıdaki gereksinimlerde anlatıldığı gibi Platform-Tools'u kurun.
 
-Doğrudan web sitesinden dağıtım için Organizer > Distribute App > Developer ID seçin. App Store için önce App Store Connect'te aynı bundle ID ile uygulama kaydı oluşturun, ardından Organizer > Distribute App > App Store Connect > Upload seçin. App Store dağıtımında Apple Development değil, dağıtım sertifikası kullanılmalıdır; Xcode bunu dağıtım akışında seçtirir.
+## Komut satırından derleme
 
-Not: Debug yapılandırmasında sandbox kapalıdır. Release/App Store yapılandırmasında sandbox açıktır; paketli ADB alt süreci `ADBHelper.entitlements` ile ana uygulamanın sandbox ve USB izinlerini devralır. ADB'nin RSA kimliği uygulamanın Application Support konteynerinde tutulur ve daemon, sandbox içindeki yerel soketi kullanır.
-
-İmzalama için Apple Developer Program hesabı, Team seçimi ve geçerli sertifika gerekir. Hesap veya sertifika yoksa Signing & Capabilities ekranındaki “Add Account” ile Apple ID'nizi ekleyin; ücretli dağıtım ve App Store gönderimi için Apple Developer üyeliği gereklidir.
-
-## Android bağlantısı
-
-1. Ayarlar > Telefon Hakkında bölümünü açın.
-2. Yapım Numarası'na yedi kez dokunun.
-3. Geliştirici Seçenekleri > USB Hata Ayıklama'yı etkinleştirin.
-4. Veri destekli USB kablosu ile Mac'e bağlayın.
-5. Telefon kilidini açıp RSA izin penceresini onaylayın.
-
-Algılanmıyorsa yalnızca şarj destekleyen kabloyu değiştirin, USB modunu kontrol edin ve `adb devices -l` çıktısını doğrulayın.
-
-## Mimari
-
-- `ADBService`: ADB komutları, depolama sınırı ve hata eşleme
-- `ProcessRunner`: stdout/stderr, çıkış kodu, zaman aşımı ve iptal
-- `AppViewModel`: cihaz izleme, gezinme, kuyruk ve kullanıcı işlemleri
-- SwiftUI görünümleri: macOS arayüzü ve onboarding
-- Protokol tabanlı servis enjeksiyonu sayesinde sahte servisle test
-
-Kullanılan komutlar: `adb devices -l`, `adb -s SERIAL shell getprop`, güvenli argümanlarla `sh -c` tabanlı dizin listeleme, `adb push`, `adb pull`, `mkdir --`, `mv --` ve `rm -rf --`. Swift tarafında komut satırı birleştirilmez; executable URL ve argument dizisi kullanılır. Listeleme sırasında dosya adları Base64 kodlanarak ayrıştırıcıya taşınır.
-
-## Paketleme ve notarization
-
-Yerel `.app` paketi üretmek için:
+Swift 6 yüklü macOS'te proje kökünde:
 
 ```sh
-chmod +x scripts/package-app.sh
-./scripts/package-app.sh
+swift build
+swift run FileFlyfer
 ```
 
-Script, release executable'ını `dist/FileFlyfer.app` içine koyar. Üretim ADB binary'sini `Vendor/platform-tools/adb` altına yerleştirin. İmzalı paket için `CODE_SIGN_IDENTITY` verin:
+Testleri çalıştırmak için:
 
 ```sh
-CODE_SIGN_IDENTITY="Developer ID Application: Şirketiniz (TEAMID)" ./scripts/package-app.sh
+swift test
 ```
 
-Bu script geliştirme ve Developer ID dağıtımı için başlangıç paketidir; App Store yüklemesi için Xcode içinde gerçek bir macOS Application target'ı oluşturup aynı bundle identifier, sandbox capability ve `Mac App Store` dağıtım sertifikasıyla Archive/Distribute akışı kullanılmalıdır.
+ADB yolu standart konumlarda değilse:
 
-ADB ikilisi depoya dahil değildir. Google'ın lisans koşullarını kabul ederek Android SDK Platform-Tools'u kendiniz yükleyin; uygulama kurulu ADB'yi kullanır. Paketlenmiş bir uygulama dağıtacaksanız, dahil ettiğiniz Platform-Tools sürümünün lisans ve bildirim koşullarını izleyin.
+```sh
+ADB_PATH="$HOME/Library/Android/sdk/platform-tools/adb" swift run FileFlyfer
+```
 
-Developer ID dağıtımında ADB dahil yürütülebilirleri imzalayın, Hardened Runtime kullanın, paketi Apple notarization işleminden geçirin ve Gatekeeper ile doğrulayın. App Store dağıtımı için sandbox ve imzalama ayarlarını Xcode arşivinde ayrıca doğrulayın.
+## Android telefonu bağlama
+
+1. Telefonda **Ayarlar → Telefon hakkında** bölümünü açın.
+2. **Yapım numarası** seçeneğine yedi kez dokunarak geliştirici seçeneklerini etkinleştirin.
+3. **Geliştirici seçenekleri → USB hata ayıklama** ayarını açın.
+4. Telefonu veri aktarımını destekleyen bir USB kablosuyla Mac'e bağlayın.
+5. Telefonun kilidini açın ve ekranda çıkan RSA hata ayıklama iznini onaylayın.
+
+Telefon görünmüyorsa `adb devices -l` komutuyla bağlantıyı kontrol edin; cihaz `unauthorized` görünüyorsa RSA izin penceresini onaylayın.
+
+## ADB ve gizlilik
+
+ADB ikilisi kaynak kod deposuna dahil değildir. Her kullanıcı Android SDK Platform-Tools'u kendi bilgisayarına yükler ve kendi lisans koşullarını kabul eder. Uygulama ADB'yi yerel olarak çalıştırır; telefonla aktarım USB üzerinden yapılır.
+
+Swift tarafı ADB'yi kabuk metni birleştirerek değil, yürütülebilir dosya ve ayrı argümanlarla çağırır. Telefon üzerindeki bazı işlemler uzak kabuk komutları gerektirir; dosya adları güvenli aktarılır ve uygulama işlemleri ortak depolama alanıyla sınırlar.
 
 ## Bilinen sınırlamalar
 
-- İlk sürüm yalnızca USB ADB kullanır; MTP, Wi-Fi, iOS, root, bulut, önizleme ve senkronizasyon yoktur.
-- Bazı üretici ROM'ları ortak depolamadaki `stat`/`base64` araçlarında farklılık gösterebilir.
-- Aktarım ilerlemesi ADB'nin güvenilir yüzdesi olmadığı için belirsizdir.
-- Klasör indirme arayüzü ilk sürümde kapalıdır; dosyalar seçilerek indirilir.
-- Üretim ADB binary'si ve tam Google lisans metinleri kaynak kod deposuna henüz eklenmemiştir; yayın arşivinden önce yukarıdaki paketleme adımları zorunludur.
+- Yalnızca USB üzerinden ADB bağlantısı vardır; MTP, Wi-Fi, iOS, root, bulut, eşitleme ve dosya önizleme desteklenmez.
+- Klasör indirme şu an desteklenmez; dosyalar seçilerek indirilir.
+- Bazı Android üretici yazılımları dosya bilgisi için kullanılan `stat` veya `base64` komutlarını içermeyebilir.
+- ADB güvenilir aktarım yüzdesi vermediğinden ilerleme belirsiz gösterilir.
 
-## Örnek hata senaryoları
+## Katkıda bulunma
 
-- `unauthorized`: telefon kilidini açıp RSA iznini onaylayın.
-- `offline`: kabloyu yeniden bağlayın ve cihaz listesini yenileyin.
-- `no space left on device`: cihazda alan açın.
-- `permission denied` / salt okunur hedef: ortak depolamada yazılabilir klasör seçin.
-- Uzun süren komut: işlem zaman aşımı hatasına dönüşür; aktarım 60 dakika sınırına sahiptir.
-- Kablo aktarımda çıkarılırsa kuyruk öğesi başarısız olur ve cihaz izleyici durumu en geç birkaç saniyede yeniler.
+Hata bildirmek veya özellik önermek için GitHub Issues kullanabilirsiniz. Değişiklik göndermeden önce `swift test` ve `swift build` komutlarını çalıştırın; pull request açıklamasında neyin değiştiğini belirtin. Ayrıntılar için [CONTRIBUTING.md](CONTRIBUTING.md) dosyasına bakın.
+
+## Lisans
+
+FileFlyfer, [MIT Lisansı](LICENSE) altında yayımlanır. Android SDK Platform-Tools ayrı bir Google ürünüdür ve kendi lisans koşullarına tabidir.
