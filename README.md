@@ -10,6 +10,7 @@ FileFlyfer, Android telefonların ortak depolama alanını Mac'ten yönetmek iç
 
 - USB ve kablosuz ADB cihazlarını aynı anda bağlama, tek listeden yönetme ve aralarında hızla geçiş yapma
 - Android 11+ telefonları QR kodla eşleştirip kablosuz bağlama; IP/port ve eşleştirme koduyla manuel bağlantı seçeneği
+- Son bağlanan kablosuz cihazları yerel geçmişte saklama ve tek tıkla yeniden bağlanma
 - Cihaz modeli, adı ve Android sürümünü görüntüleme
 - `/sdcard` klasörlerinde gezinme, konum yolunu izleme ve klasörleri favorilere ekleme
 - Dosyaları ada, türe, boyuta ve değiştirilme tarihine göre görme
@@ -82,7 +83,7 @@ Telefon görünmüyorsa `adb devices -l` komutuyla bağlantıyı kontrol edin; c
 
 ## Android telefonu kablosuz bağlama
 
-Android 11 veya sonrası ve Android SDK Platform-Tools gerekir. Telefonda **Geliştirici seçenekleri → Kablosuz hata ayıklama** ayarını açın ve Mac ile telefonu aynı Wi-Fi ağına bağlayın. FileFlyfer'de **Kablosuz Bağlan** düğmesine basın. İlk eşleştirmede telefonun **QR kodla cihaz eşleştir** ekranını açıp FileFlyfer'de üretilen kodu okutun; ardından **Taranınca otomatik bağlan** düğmesine basın. FileFlyfer ADB mDNS hizmetini bulur, eşleştirmeyi yapar ve bağlantı hizmetine bağlanır. macOS yerel ağ erişimi sorarsa izin verin. QR eşleştirme kullanılamıyorsa ekrandaki eşleştirme kodu ve IP/port alanlarıyla devam edebilirsiniz.
+Android 11 veya sonrası ve Android SDK Platform-Tools gerekir. Telefonda **Geliştirici seçenekleri → Kablosuz hata ayıklama** ayarını açın ve Mac ile telefonu aynı Wi-Fi ağına bağlayın. FileFlyfer'de **Kablosuz Bağlan** düğmesine basın. İlk eşleştirmede telefonun **QR kodla cihaz eşleştir** ekranını açıp FileFlyfer'de üretilen kodu okutun; ardından **Taranınca otomatik bağlan** düğmesine basın. FileFlyfer ADB mDNS hizmetini bulur, eşleştirmeyi yapar ve bağlantı hizmetine bağlanır. Son bağlantılar Mac'te yerel geçmişte tutulur; **Son bağlanan cihazlar** listesinden tek tıkla yeniden bağlanabilirsiniz. macOS yerel ağ erişimi sorarsa izin verin. QR eşleştirme kullanılamıyorsa ekrandaki eşleştirme kodu ve IP/port alanlarıyla devam edebilirsiniz.
 
 ## ADB ve gizlilik
 

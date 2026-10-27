@@ -2,10 +2,11 @@ import Foundation
 
 protocol ADBServicing: Sendable {
     func devices() async throws -> [AndroidDevice]
+    func wirelessEndpoints() async throws -> [WirelessADBEndpoint]
     func pairWireless(address: String, pairingCode: String) async throws
-    func connectWireless(address: String) async throws
+    func connectWireless(address: String, deviceSerial: String?) async throws -> String
     func disconnectWireless(address: String) async throws
-    func pairAndConnectWirelessQR(serviceName: String, secret: String) async throws
+    func pairAndConnectWirelessQR(serviceName: String, secret: String) async throws -> String
     func deviceDetails(for device: AndroidDevice) async throws -> AndroidDevice
     func list(path: String, device: AndroidDevice) async throws -> [RemoteFile]
     func push(local: URL, remote: String, device: AndroidDevice) async throws
@@ -30,43 +31,80 @@ final class ADBService: ADBServicing, @unchecked Sendable {
         return ADBOutputParser.devices(result.outputString)
     }
 
+    func wirelessEndpoints() async throws -> [WirelessADBEndpoint] {
+        let result = try await execute(["mdns", "services"])
+        return result.outputString.split(whereSeparator: \.isNewline).compactMap { line in
+            let fields = line.split(whereSeparator: \.isWhitespace)
+            guard fields.count >= 2,
+                  Self.containsServiceType("_adb-tls-connect._tcp", in: fields),
+                  let endpoint = fields.last, endpoint.contains(":") else { return nil }
+            let serviceType = fields.first(where: { $0.contains("_adb-tls-connect._tcp") })
+                ?? Substring("_adb-tls-connect._tcp")
+            let instance = fields[0].hasSuffix(".") ? fields[0].dropLast() : fields[0][...]
+            let serial = String(instance).contains("_adb-tls-connect._tcp")
+                ? String(instance)
+                : "\(instance).\(serviceType)"
+            return WirelessADBEndpoint(deviceSerial: serial, endpoint: String(endpoint))
+        }
+    }
+
     func pairWireless(address: String, pairingCode: String) async throws {
         _ = try await execute(["pair", Self.validatedEndpoint(address), pairingCode], timeout: .seconds(60))
     }
 
-    func connectWireless(address: String) async throws {
-        _ = try await execute(["connect", Self.validatedEndpoint(address)], timeout: .seconds(30))
+    func connectWireless(address: String, deviceSerial: String? = nil) async throws -> String {
+        let currentEndpoint: String
+        if let deviceSerial,
+           let discovered = try? await discoverMDNSEndpoint(type: "_adb-tls-connect._tcp.", serviceName: deviceSerial, timeout: .seconds(4)) {
+            currentEndpoint = discovered
+        } else {
+            currentEndpoint = try Self.validatedEndpoint(address)
+        }
+        _ = try await execute(["connect", currentEndpoint], timeout: .seconds(30))
+        return currentEndpoint
     }
 
     func disconnectWireless(address: String) async throws {
         _ = try await execute(["disconnect", Self.validatedEndpoint(address)], timeout: .seconds(30))
     }
 
-    func pairAndConnectWirelessQR(serviceName: String, secret: String) async throws {
+    func pairAndConnectWirelessQR(serviceName: String, secret: String) async throws -> String {
         let pairing = try await discoverMDNSEndpoint(type: "_adb-tls-pairing._tcp.", serviceName: serviceName)
         _ = try await execute(["pair", pairing, secret], timeout: .seconds(60))
         let pairingHost = pairing[..<(pairing.lastIndex(of: ":") ?? pairing.endIndex)]
         let connection = try await discoverMDNSEndpoint(type: "_adb-tls-connect._tcp.", serviceName: nil, preferredHost: String(pairingHost))
         _ = try await execute(["connect", connection], timeout: .seconds(30))
+        return connection
     }
 
-    private func discoverMDNSEndpoint(type: String, serviceName: String?, preferredHost: String? = nil) async throws -> String {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(90))
+    private func discoverMDNSEndpoint(
+        type: String,
+        serviceName: String?,
+        preferredHost: String? = nil,
+        timeout: Duration = .seconds(90)
+    ) async throws -> String {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
         while ContinuousClock.now < deadline {
             let result = try await execute(["mdns", "services"], timeout: .seconds(10))
             for line in result.outputString.split(whereSeparator: \.isNewline) {
                 let fields = line.split(whereSeparator: \.isWhitespace)
                 guard fields.count >= 2,
-                      fields[0].contains(type),
+                      Self.containsServiceType(String(type.dropLast()), in: fields),
                       let endpoint = fields.last,
                       endpoint.contains(":"),
-                      serviceName.map({ fields[0].contains($0) }) ?? true,
+                      serviceName.map({ fields.joined(separator: " ").contains($0) }) ?? true,
                       preferredHost.map({ String(endpoint[..<(endpoint.lastIndex(of: ":") ?? endpoint.endIndex)]) == $0 }) ?? true else { continue }
                 return String(endpoint)
             }
             try await Task.sleep(for: .seconds(1))
         }
         throw AppError.commandFailed(String(localized: "Cihaz bulunamadı. QR kodu telefonun Kablosuz hata ayıklama ekranından tarayın ve aynı Wi-Fi ağında olduğunuzu kontrol edin."))
+    }
+
+    private static func containsServiceType(_ serviceType: String, in fields: [Substring]) -> Bool {
+        fields.contains { field in
+            field == Substring(serviceType) || field.hasSuffix(".\(serviceType)") || field.hasSuffix("\(serviceType).")
+        }
     }
 
     private static func validatedEndpoint(_ value: String) throws -> String {

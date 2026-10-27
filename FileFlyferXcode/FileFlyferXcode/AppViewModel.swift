@@ -20,6 +20,7 @@ final class AppViewModel: ObservableObject {
     @Published var isQRWirelessActionRunning = false
     @Published var wirelessConnectionSucceeded = false
     @Published var wirelessMessage: String?
+    @Published var recentWirelessConnections: [RecentWirelessConnection] = []
     @Published var error: AppError?
     @Published var technicalError: String?
     @Published var conflict: TransferConflict?
@@ -29,14 +30,23 @@ final class AppViewModel: ObservableObject {
     @Published var thumbnailImages: [RemoteFile.ID: NSImage] = [:]
 
     private let service: ADBServicing
+    private let preferences: UserDefaults
     private var monitoringTask: Task<Void, Never>?
     private var transferTask: Task<Void, Never>?
     private var previewRequestID = UUID()
     private var loadingThumbnailIDs = Set<RemoteFile.ID>()
     private var pendingConflicts: [TransferConflict] = []
     private var loadedLocationKey: String?
+    private var lastWirelessHistoryScanAt: Date?
 
-    init(service: ADBServicing = ADBService()) { self.service = service }
+    init(service: ADBServicing = ADBService(), preferences: UserDefaults = .standard) {
+        self.service = service
+        self.preferences = preferences
+        if let data = preferences.data(forKey: "recentWirelessConnections"),
+           let saved = try? JSONDecoder().decode([RecentWirelessConnection].self, from: data) {
+            recentWirelessConnections = saved.sorted { $0.lastConnectedAt > $1.lastConnectedAt }
+        }
+    }
 
     var selectedDevice: AndroidDevice? { devices.first { $0.id == selectedDeviceID } }
     var selectedFiles: [RemoteFile] { files.filter { selectedFileIDs.contains($0.id) } }
@@ -71,15 +81,22 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    func connectWireless(address: String) async {
+    func connectWireless(address: String, deviceSerial: String? = nil) async {
         guard !isWirelessActionRunning else { return }
         isWirelessActionRunning = true
         wirelessConnectionSucceeded = false
         defer { isWirelessActionRunning = false }
+        let existingIDs = Set(devices.map(\.id))
+        let existingEntry = recentWirelessConnections.first { $0.endpoint == address || $0.deviceSerial == deviceSerial }
         do {
-            try await service.connectWireless(address: address)
+            let connectedEndpoint = try await service.connectWireless(address: address, deviceSerial: deviceSerial)
             wirelessMessage = String(localized: "Bağlantı kuruldu. Cihaz listesi yenileniyor…")
             await refreshDevices()
+            let connectedDevice = devices.first { isWireless($0) && !existingIDs.contains($0.id) }
+                ?? devices.first { $0.id == existingEntry?.deviceSerial }
+                ?? devices.first { $0.serial == address }
+            rememberWirelessConnection(connectedEndpoint, device: connectedDevice, fallbackName: existingEntry?.deviceName)
+            selectConnectedDevice(connectedDevice)
             wirelessConnectionSucceeded = true
         } catch { wirelessMessage = error.localizedDescription }
     }
@@ -101,20 +118,62 @@ final class AppViewModel: ObservableObject {
         isQRWirelessActionRunning = true
         wirelessConnectionSucceeded = false
         wirelessMessage = String(localized: "Telefonun QR kodu taraması bekleniyor…")
+        let existingIDs = Set(devices.map(\.id))
         defer {
             isWirelessActionRunning = false
             isQRWirelessActionRunning = false
         }
         do {
-            try await service.pairAndConnectWirelessQR(serviceName: serviceName, secret: secret)
+            let endpoint = try await service.pairAndConnectWirelessQR(serviceName: serviceName, secret: secret)
             wirelessMessage = String(localized: "Eşleştirme tamamlandı ve telefon bağlandı.")
             await refreshDevices()
+            let connectedDevice = devices.first { isWireless($0) && !existingIDs.contains($0.id) }
+                ?? devices.first { $0.serial == endpoint }
+            rememberWirelessConnection(endpoint, device: connectedDevice)
+            selectConnectedDevice(connectedDevice)
             wirelessConnectionSucceeded = true
         } catch {
             wirelessMessage = Task.isCancelled || (error as? AppError) == .cancelled
                 ? String(localized: "Kablosuz bağlantı iptal edildi.")
                 : error.localizedDescription
         }
+    }
+
+    func forgetRecentWirelessConnection(_ connection: RecentWirelessConnection) {
+        recentWirelessConnections.removeAll { $0.id == connection.id }
+        saveRecentWirelessConnections()
+    }
+
+    private func rememberWirelessConnection(_ endpoint: String, device: AndroidDevice?, fallbackName: String? = nil) {
+        let endpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let entry = RecentWirelessConnection(
+            endpoint: endpoint,
+            deviceSerial: device?.serial,
+            deviceName: device?.displayName ?? fallbackName ?? endpoint,
+            lastConnectedAt: Date()
+        )
+        recentWirelessConnections.removeAll { $0.endpoint == endpoint || (device?.serial != nil && $0.deviceSerial == device?.serial) }
+        recentWirelessConnections.insert(entry, at: 0)
+        recentWirelessConnections = Array(recentWirelessConnections.prefix(12))
+        saveRecentWirelessConnections()
+    }
+
+    private func saveRecentWirelessConnections() {
+        guard let data = try? JSONEncoder().encode(recentWirelessConnections) else { return }
+        preferences.set(data, forKey: "recentWirelessConnections")
+    }
+
+    private func isWireless(_ device: AndroidDevice) -> Bool {
+        device.serial.contains(":") || device.serial.contains("_adb-tls-connect._tcp")
+    }
+
+    private func selectConnectedDevice(_ device: AndroidDevice?) {
+        guard let device else { return }
+        selectedDeviceID = device.id
+        currentPath = "/sdcard"
+        files = []
+        loadedLocationKey = nil
+        Task { await loadFiles() }
     }
 
     func refreshDevices(silent: Bool = false) async {
@@ -132,6 +191,7 @@ final class AppViewModel: ObservableObject {
             }
             let previous = selectedDeviceID
             devices = found
+            await importDiscoveredWirelessConnections(from: found)
             if let previous, found.contains(where: { $0.id == previous }) {
                 selectedDeviceID = previous
             } else {
@@ -148,6 +208,21 @@ final class AppViewModel: ObservableObject {
             // The monitor runs every three seconds. A background failure updates
             // naturally on the next pass and must not reopen a dismissed alert.
             if !silent { present(error) }
+        }
+    }
+
+    private func importDiscoveredWirelessConnections(from devices: [AndroidDevice]) async {
+        guard devices.contains(where: isWireless),
+              lastWirelessHistoryScanAt.map({ Date().timeIntervalSince($0) > 60 }) ?? true else { return }
+        lastWirelessHistoryScanAt = Date()
+        guard let endpoints = try? await service.wirelessEndpoints() else { return }
+        for endpoint in endpoints {
+            guard let device = devices.first(where: {
+                isWireless($0) && ($0.serial == endpoint.deviceSerial || $0.serial.hasPrefix(endpoint.deviceSerial) || endpoint.deviceSerial.hasPrefix($0.serial))
+            }), !recentWirelessConnections.contains(where: {
+                $0.endpoint == endpoint.endpoint || $0.deviceSerial == device.serial
+            }) else { continue }
+            rememberWirelessConnection(endpoint.endpoint, device: device)
         }
     }
 

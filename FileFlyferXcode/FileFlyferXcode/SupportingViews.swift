@@ -112,6 +112,44 @@ struct WirelessConnectionView: View {
                 }.padding(.vertical, 4)
             }
 
+            if !model.recentWirelessConnections.isEmpty {
+                GroupBox("Son bağlanan cihazlar") {
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            ForEach(model.recentWirelessConnections) { connection in
+                                HStack(spacing: 10) {
+                                    Image(systemName: "wifi").foregroundStyle(.tint)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(connection.deviceName).lineLimit(1)
+                                        Text("\(connection.endpoint) · \(connection.lastConnectedAt.formatted(date: .abbreviated, time: .shortened))")
+                                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    }
+                                    Spacer(minLength: 4)
+                                    Button {
+                                        deviceAddress = connection.endpoint
+                                        Task { await model.connectWireless(address: connection.endpoint, deviceSerial: connection.deviceSerial) }
+                                    } label: {
+                                        Label("Yeniden bağlan", systemImage: "arrow.clockwise")
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .disabled(model.isWirelessActionRunning)
+                                    Button {
+                                        model.forgetRecentWirelessConnection(connection)
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("Geçmişten kaldır")
+                                    .disabled(model.isWirelessActionRunning)
+                                }
+                                if connection.id != model.recentWirelessConnections.last?.id { Divider() }
+                            }
+                        }.padding(.vertical, 4)
+                    }
+                    .frame(maxHeight: 190)
+                }
+            }
+
             if let message = model.wirelessMessage {
                 Label(message, systemImage: message.localizedCaseInsensitiveContains("tamam") || message.localizedCaseInsensitiveContains("kuruldu") ? "checkmark.circle" : "info.circle")
                     .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)

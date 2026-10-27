@@ -10,6 +10,7 @@ FileFlyfer is a free, open-source macOS app for managing shared Android storage 
 
 - Connect multiple USB and Wi-Fi ADB devices at once, manage them from one list, and switch between phones quickly
 - Pair Android 11+ phones over Wi-Fi with a QR code, with manual IP/port and pairing-code options
+- Save recent wireless devices locally and reconnect to them with one click
 - View the device model, name, and Android version
 - Browse folders under `/sdcard`, follow the current path, and favorite folders
 - View file names, types, sizes, and modification dates
@@ -82,7 +83,7 @@ If the phone does not appear, check the connection with `adb devices -l`. If the
 
 ## Connect an Android phone over Wi-Fi
 
-Android 11 or later and Android SDK Platform-Tools are required. Turn on **Developer options → Wireless debugging** on the phone and connect the Mac and phone to the same Wi-Fi network. In FileFlyfer, click **Kablosuz Bağlan**. For the first pairing, open **Pair device with QR code** on the phone, scan the QR shown by FileFlyfer, and click **Taranınca otomatik bağlan**. FileFlyfer discovers the ADB mDNS service, pairs, and connects. Allow local network access if macOS asks. If QR pairing is unavailable, use the manual pairing code and IP/port fields.
+Android 11 or later and Android SDK Platform-Tools are required. Turn on **Developer options → Wireless debugging** on the phone and connect the Mac and phone to the same Wi-Fi network. In FileFlyfer, click **Kablosuz Bağlan**. For the first pairing, open **Pair device with QR code** on the phone, scan the QR shown by FileFlyfer, and click **Taranınca otomatik bağlan**. FileFlyfer discovers the ADB mDNS service, pairs, and connects. Recent connections are saved locally on the Mac; use **Son bağlanan cihazlar** to reconnect with one click. Allow local network access if macOS asks. If QR pairing is unavailable, use the manual pairing code and IP/port fields.
 
 ## ADB and privacy
 

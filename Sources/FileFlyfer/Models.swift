@@ -55,6 +55,20 @@ struct AndroidDevice: Identifiable, Hashable, Sendable {
     }
 }
 
+struct RecentWirelessConnection: Identifiable, Codable, Equatable, Sendable {
+    let endpoint: String
+    let deviceSerial: String?
+    let deviceName: String
+    let lastConnectedAt: Date
+
+    var id: String { endpoint }
+}
+
+struct WirelessADBEndpoint: Sendable {
+    let deviceSerial: String
+    let endpoint: String
+}
+
 struct RemoteFile: Identifiable, Hashable, Sendable {
     enum Kind: String, Sendable { case directory = "d", file = "f", link = "l", other }
 

@@ -56,10 +56,11 @@ final class FakeADBService: ADBServicing, @unchecked Sendable {
         if let devicesError { throw devicesError }
         return suppliedDevices
     }
+    func wirelessEndpoints() async throws -> [WirelessADBEndpoint] { [] }
     func pairWireless(address: String, pairingCode: String) async throws {}
-    func connectWireless(address: String) async throws {}
+    func connectWireless(address: String, deviceSerial: String?) async throws -> String { address }
     func disconnectWireless(address: String) async throws {}
-    func pairAndConnectWirelessQR(serviceName: String, secret: String) async throws {}
+    func pairAndConnectWirelessQR(serviceName: String, secret: String) async throws -> String { "127.0.0.1:5555" }
     func deviceDetails(for device: AndroidDevice) async throws -> AndroidDevice { device }
     func list(path: String, device: AndroidDevice) async throws -> [RemoteFile] { listCallCount += 1; return [] }
     func push(local: URL, remote: String, device: AndroidDevice) async throws {}
