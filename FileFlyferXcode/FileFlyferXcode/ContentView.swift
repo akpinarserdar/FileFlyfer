@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var renameTarget: RemoteFile?
     @State private var renameText = ""
     @State private var deleteTargets: [RemoteFile] = []
+    @State private var wirelessConnectionPresented = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -72,6 +73,9 @@ struct ContentView: View {
         } message: { error in
             Text(error.localizedDescription)
         }
+        .sheet(isPresented: $wirelessConnectionPresented) {
+            WirelessConnectionView(model: model)
+        }
     }
 
     private var deviceBar: some View {
@@ -87,11 +91,21 @@ struct ContentView: View {
             if let device = model.selectedDevice {
                 Circle().fill(statusColor(device.state)).frame(width: 8, height: 8)
                 Text(device.state.title)
+                if isWirelessDevice(device) {
+                    Label("Kablosuz", systemImage: "wifi")
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                        .help("Bu cihaz ADB üzerinden Wi-Fi ile bağlı.")
+                }
                 if let version = device.androidVersion, !version.isEmpty {
                     Text("Android \(version)").foregroundStyle(.secondary)
                 }
             }
             Spacer()
+            Button { wirelessConnectionPresented = true } label: {
+                Label("Kablosuz Bağlan", systemImage: "wifi")
+            }
             if model.isLoading { ProgressView().controlSize(.small) }
             Button { Task { await model.refreshDevices() } } label: {
                 Label("Yenile", systemImage: "arrow.clockwise")
@@ -293,6 +307,9 @@ struct ContentView: View {
     }
     private func statusColor(_ state: DeviceState) -> Color {
         switch state { case .device: .green; case .unauthorized: .orange; case .offline: .red; case .unknown: .gray }
+    }
+    private func isWirelessDevice(_ device: AndroidDevice) -> Bool {
+        device.serial.contains(":") || device.serial.contains("_adb-tls-connect._tcp")
     }
 }
 

@@ -80,16 +80,20 @@ struct TransferItem: Identifiable, Sendable {
     let source: String
     let destination: String
     let fileName: String
+    let deviceID: String
+    let deviceName: String
     let direction: TransferDirection
     var status: TransferStatus
     var startedAt: Date?
     var errorMessage: String?
 
-    init(source: String, destination: String, fileName: String, direction: TransferDirection) {
+    init(source: String, destination: String, fileName: String, deviceID: String, deviceName: String, direction: TransferDirection) {
         id = UUID()
         self.source = source
         self.destination = destination
         self.fileName = fileName
+        self.deviceID = deviceID
+        self.deviceName = deviceName
         self.direction = direction
         status = .waiting
     }

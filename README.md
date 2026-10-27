@@ -4,16 +4,18 @@
 
 [![MIT Lisansı](https://img.shields.io/badge/lisans-MIT-blue.svg)](LICENSE) [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black)](#gereksinimler)
 
-FileFlyfer, USB ile bağlanan Android telefonların ortak depolama alanını Mac'ten yönetmek için hazırlanmış ücretsiz ve açık kaynaklı bir macOS uygulamasıdır. Dosya aktarımını Android Debug Bridge (ADB) ile yapar; telefona ek uygulama kurmaz ve root erişimi istemez.
+FileFlyfer, Android telefonların ortak depolama alanını Mac'ten yönetmek için hazırlanmış ücretsiz ve açık kaynaklı bir macOS uygulamasıdır. USB ve kablosuz ADB bağlantılarını tek ekranda yönetir; telefona ek uygulama kurmaz ve root erişimi istemez.
 
 ## Özellikler
 
-- Bağlı Android cihazları bulma ve birden fazla cihaz arasında seçim yapma
+- USB ve kablosuz ADB cihazlarını aynı anda bağlama, tek listeden yönetme ve aralarında hızla geçiş yapma
+- Android 11+ telefonları QR kodla eşleştirip kablosuz bağlama; IP/port ve eşleştirme koduyla manuel bağlantı seçeneği
 - Cihaz modeli, adı ve Android sürümünü görüntüleme
 - `/sdcard` klasörlerinde gezinme, konum yolunu izleme ve klasörleri favorilere ekleme
 - Dosyaları ada, türe, boyuta ve değiştirilme tarihine göre görme
 - Dosyaları Mac ile telefon arasında tek tek veya çoklu aktarma; sürükle ve bırak desteği
-- Sıralı aktarım kuyruğunu iptal etme
+- Hedef cihazı her aktarımda koruyan kuyruk; bağlı telefonlar arasında doğru cihaza güvenli aktarım
+- Devam eden aktarımı iptal etme
 - Telefonda klasör oluşturma, dosya veya klasör adını değiştirme ve onayla silme
 - Aynı adda dosya varsa üzerine yazma, atlama veya yeni ad verme
 - Türkçe karakter ve diğer Unicode dosya adlarını güvenli işleme
@@ -26,7 +28,7 @@ ADB güvenilir bir yüzde bilgisi sağlamadığı için aktarım sırasında sah
 - Xcode 15 veya sonrası (Xcode projesiyle çalıştırmak için)
 - Swift 6 araç zinciri (Swift Package Manager ile derlemek için)
 - Android SDK Platform-Tools içindeki `adb`
-- USB hata ayıklaması açık ve kilidi açılmış bir Android cihaz
+- USB veya kablosuz hata ayıklaması açık ve kilidi açılmış bir Android cihaz
 
 ADB'yi Android Studio'nun SDK Manager bölümünden veya Android SDK Platform-Tools paketinden yükleyin. Uygulama ADB'yi `ADB_PATH`, yaygın Homebrew yolları ve `~/Library/Android/sdk/platform-tools/adb` konumlarında arar. ADB farklı bir yerdeyse yolunu `ADB_PATH` ile belirtebilirsiniz.
 
@@ -68,7 +70,7 @@ ADB yolu standart konumlarda değilse:
 ADB_PATH="$HOME/Library/Android/sdk/platform-tools/adb" swift run FileFlyfer
 ```
 
-## Android telefonu bağlama
+## Android telefonu USB ile bağlama
 
 1. Telefonda **Ayarlar → Telefon hakkında** bölümünü açın.
 2. **Yapım numarası** seçeneğine yedi kez dokunarak geliştirici seçeneklerini etkinleştirin.
@@ -78,15 +80,19 @@ ADB_PATH="$HOME/Library/Android/sdk/platform-tools/adb" swift run FileFlyfer
 
 Telefon görünmüyorsa `adb devices -l` komutuyla bağlantıyı kontrol edin; cihaz `unauthorized` görünüyorsa RSA izin penceresini onaylayın.
 
+## Android telefonu kablosuz bağlama
+
+Android 11 veya sonrası ve Android SDK Platform-Tools gerekir. Telefonda **Geliştirici seçenekleri → Kablosuz hata ayıklama** ayarını açın ve Mac ile telefonu aynı Wi-Fi ağına bağlayın. FileFlyfer'de **Kablosuz Bağlan** düğmesine basın. İlk eşleştirmede telefonun **QR kodla cihaz eşleştir** ekranını açıp FileFlyfer'de üretilen kodu okutun; ardından **Taranınca otomatik bağlan** düğmesine basın. FileFlyfer ADB mDNS hizmetini bulur, eşleştirmeyi yapar ve bağlantı hizmetine bağlanır. macOS yerel ağ erişimi sorarsa izin verin. QR eşleştirme kullanılamıyorsa ekrandaki eşleştirme kodu ve IP/port alanlarıyla devam edebilirsiniz.
+
 ## ADB ve gizlilik
 
-ADB ikilisi kaynak kod deposuna dahil değildir. Her kullanıcı Android SDK Platform-Tools'u kendi bilgisayarına yükler ve kendi lisans koşullarını kabul eder. Uygulama ADB'yi yerel olarak çalıştırır; telefonla aktarım USB üzerinden yapılır.
+ADB ikilisi kaynak kod deposuna dahil değildir. Her kullanıcı Android SDK Platform-Tools'u kendi bilgisayarına yükler ve kendi lisans koşullarını kabul eder. Uygulama ADB'yi yerel olarak çalıştırır; telefonla aktarım USB veya aynı yerel Wi-Fi ağı üzerinden yapılır.
 
 Swift tarafı ADB'yi kabuk metni birleştirerek değil, yürütülebilir dosya ve ayrı argümanlarla çağırır. Telefon üzerindeki bazı işlemler uzak kabuk komutları gerektirir; dosya adları güvenli aktarılır ve uygulama işlemleri ortak depolama alanıyla sınırlar.
 
 ## Bilinen sınırlamalar
 
-- Yalnızca USB üzerinden ADB bağlantısı vardır; MTP, Wi-Fi, iOS, root, bulut, eşitleme ve dosya önizleme desteklenmez.
+- Kablosuz ADB için Android 11 veya sonrası gerekir; MTP, iOS, root, bulut ve eşitleme desteklenmez.
 - Klasör indirme şu an desteklenmez; dosyalar seçilerek indirilir.
 - Bazı Android üretici yazılımları dosya bilgisi için kullanılan `stat` veya `base64` komutlarını içermeyebilir.
 - ADB güvenilir aktarım yüzdesi vermediğinden ilerleme belirsiz gösterilir.

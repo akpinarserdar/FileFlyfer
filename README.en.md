@@ -4,16 +4,18 @@
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black)](#requirements)
 
-FileFlyfer is a free, open-source macOS app for managing the shared storage on Android phones connected over USB. It transfers files with Android Debug Bridge (ADB), needs no companion app on your phone, and does not require root access.
+FileFlyfer is a free, open-source macOS app for managing shared Android storage over USB and wireless ADB. It brings wired and Wi-Fi devices together in one workspace, needs no companion app on your phone, and does not require root access.
 
 ## Features
 
-- Find connected Android devices and choose between multiple devices
+- Connect multiple USB and Wi-Fi ADB devices at once, manage them from one list, and switch between phones quickly
+- Pair Android 11+ phones over Wi-Fi with a QR code, with manual IP/port and pairing-code options
 - View the device model, name, and Android version
 - Browse folders under `/sdcard`, follow the current path, and favorite folders
 - View file names, types, sizes, and modification dates
 - Transfer single or multiple files between Mac and phone, with drag and drop
-- Cancel the sequential transfer queue
+- Keep every transfer pinned to its target phone, even when switching devices
+- Cancel an in-progress transfer
 - Create folders, rename files or folders, and delete them with confirmation
 - Resolve name conflicts by overwriting, skipping, or choosing a new name
 - Safely handle Unicode file names
@@ -26,7 +28,7 @@ ADB does not provide a reliable percentage, so the app does not show a fabricate
 - Xcode 15 or later (to run the Xcode project)
 - Swift 6 toolchain (to build with Swift Package Manager)
 - `adb` from Android SDK Platform-Tools
-- An Android device with USB debugging enabled and its screen unlocked
+- An Android device with USB or wireless debugging enabled and its screen unlocked
 
 Install ADB through Android Studio's SDK Manager or the Android SDK Platform-Tools package. The app searches `ADB_PATH`, common Homebrew locations, and `~/Library/Android/sdk/platform-tools/adb`. Set `ADB_PATH` if ADB is installed elsewhere.
 
@@ -68,7 +70,7 @@ If ADB is not in a standard location:
 ADB_PATH="$HOME/Library/Android/sdk/platform-tools/adb" swift run FileFlyfer
 ```
 
-## Connect an Android phone
+## Connect an Android phone over USB
 
 1. Open **Settings → About phone**.
 2. Tap **Build number** seven times to enable developer options.
@@ -78,15 +80,19 @@ ADB_PATH="$HOME/Library/Android/sdk/platform-tools/adb" swift run FileFlyfer
 
 If the phone does not appear, check the connection with `adb devices -l`. If the device shows as `unauthorized`, approve the RSA prompt on the phone.
 
+## Connect an Android phone over Wi-Fi
+
+Android 11 or later and Android SDK Platform-Tools are required. Turn on **Developer options → Wireless debugging** on the phone and connect the Mac and phone to the same Wi-Fi network. In FileFlyfer, click **Kablosuz Bağlan**. For the first pairing, open **Pair device with QR code** on the phone, scan the QR shown by FileFlyfer, and click **Taranınca otomatik bağlan**. FileFlyfer discovers the ADB mDNS service, pairs, and connects. Allow local network access if macOS asks. If QR pairing is unavailable, use the manual pairing code and IP/port fields.
+
 ## ADB and privacy
 
-The ADB binary is not included in this source repository. Each user installs Android SDK Platform-Tools on their own computer and follows its license terms. The app runs ADB locally and transfers files to the phone over USB.
+The ADB binary is not included in this source repository. Each user installs Android SDK Platform-Tools on their own computer and follows its license terms. The app runs ADB locally and transfers files over USB or the local Wi-Fi network.
 
 On the Mac, the app invokes ADB with an executable path and separate arguments rather than concatenating shell commands. Some operations on the phone require remote shell commands; file names are passed safely, and operations are limited to shared storage.
 
 ## Known limitations
 
-- Only USB ADB connections are supported; MTP, Wi-Fi, iOS, root access, cloud storage, syncing, and file previews are not supported.
+- Wireless ADB requires Android 11 or later; MTP, iOS, root access, cloud storage, and syncing are not supported.
 - Folder downloads are not supported yet; select individual files to download.
 - Some Android vendor builds may not include the `stat` or `base64` commands used to read file details.
 - Transfer progress is indeterminate because ADB does not provide a reliable percentage.

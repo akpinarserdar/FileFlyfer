@@ -1,4 +1,141 @@
 import SwiftUI
+import AppKit
+import CoreImage.CIFilterBuiltins
+
+struct WirelessConnectionView: View {
+    @ObservedObject var model: AppViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var pairingAddress = ""
+    @State private var pairingCode = ""
+    @State private var deviceAddress = ""
+    @State private var qrServiceName = "studio-" + String(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased().prefix(12))
+    @State private var qrSecret = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16))
+    @State private var wirelessTask: Task<Void, Never>?
+
+    private var validEndpoint: (String) -> Bool {
+        { value in
+            let parts = value.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ":", omittingEmptySubsequences: false)
+            guard parts.count == 2, !parts[0].isEmpty, let port = Int(parts[1]) else { return false }
+            return (1...65535).contains(port) && !parts[0].contains(where: \.isWhitespace)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Kablosuz Android bağlantısı", systemImage: "wifi")
+                        .font(.title2.bold())
+                    Text("Telefon ve Mac aynı Wi-Fi ağına bağlı olmalıdır.")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Kapat") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+
+            GroupBox("İlk kez eşleştir") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Android 11+ telefonda Kablosuz hata ayıklama → QR kodla cihaz eşleştir bölümünü açıp bu kodu okutun.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 14) {
+                        if let qrImage {
+                            Image(nsImage: qrImage).interpolation(.none).resizable().frame(width: 150, height: 150)
+                                .padding(8).background(.white, in: RoundedRectangle(cornerRadius: 10))
+                        }
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("Kare kodu telefonun kendi kamerasıyla değil, Kablosuz hata ayıklama içindeki QR eşleştirme ekranıyla okutun.", systemImage: "info.circle")
+                                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            if model.isQRWirelessActionRunning {
+                                Button(role: .cancel) {
+                                    wirelessTask?.cancel()
+                                } label: {
+                                    Label("İptal", systemImage: "xmark.circle")
+                                }
+                                .buttonStyle(.bordered)
+                            } else if model.isWirelessActionRunning {
+                                ProgressView("Bağlantı işlemi sürüyor…").controlSize(.small)
+                            } else {
+                                Button {
+                                    wirelessTask = Task {
+                                        await model.pairAndConnectWirelessQR(serviceName: String(qrServiceName), secret: qrSecret)
+                                        wirelessTask = nil
+                                    }
+                                } label: { Label("Taranınca otomatik bağlan", systemImage: "wifi") }
+                                    .buttonStyle(.borderedProminent)
+                            }
+                        }
+                    }
+                    Divider()
+                    Text("İsterseniz eşleştirme koduyla da bağlanabilirsiniz.")
+                        .font(.callout).foregroundStyle(.secondary)
+                    Text("Telefonda Geliştirici seçenekleri → Kablosuz hata ayıklama → Eşleştirme koduyla eşleştir bölümünü açın.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        TextField("Eşleştirme adresi · ör. 192.168.1.25:37000", text: $pairingAddress)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("6 haneli kod", text: $pairingCode)
+                            .textFieldStyle(.roundedBorder).frame(width: 125)
+                            .onChange(of: pairingCode) { value in
+                                pairingCode = String(value.filter(\.isNumber).prefix(6))
+                            }
+                    }
+                    Button {
+                        Task { await model.pairWireless(address: pairingAddress, pairingCode: pairingCode) }
+                    } label: {
+                        if model.isWirelessActionRunning { ProgressView().controlSize(.small) }
+                        else { Label("Eşleştir", systemImage: "checkmark.shield") }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isWirelessActionRunning || !validEndpoint(pairingAddress) || pairingCode.count != 6)
+                }.padding(.vertical, 4)
+            }
+
+            GroupBox("Cihaza bağlan") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Eşleştirmeden sonra Kablosuz hata ayıklama ana ekranındaki IP adresi ve bağlantı noktası farklı olabilir. Bu adresi kullanın.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        TextField("Cihaz adresi · ör. 192.168.1.25:42000", text: $deviceAddress)
+                            .textFieldStyle(.roundedBorder)
+                        Button {
+                            Task { await model.connectWireless(address: deviceAddress) }
+                        } label: { Label("Bağlan", systemImage: "wifi") }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.isWirelessActionRunning || !validEndpoint(deviceAddress))
+                    }
+                    if let device = model.selectedDevice, device.serial.contains(":"), device.state == .device {
+                        Button(role: .destructive) {
+                            Task { await model.disconnectWireless(address: device.serial) }
+                        } label: { Label("Seçili kablosuz cihazın bağlantısını kes", systemImage: "wifi.slash") }
+                            .disabled(model.isWirelessActionRunning)
+                    }
+                }.padding(.vertical, 4)
+            }
+
+            if let message = model.wirelessMessage {
+                Label(message, systemImage: message.localizedCaseInsensitiveContains("tamam") || message.localizedCaseInsensitiveContains("kuruldu") ? "checkmark.circle" : "info.circle")
+                    .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+        }
+        .padding(24)
+        .frame(width: 620)
+        .fixedSize(horizontal: false, vertical: true)
+        .onChange(of: model.wirelessConnectionSucceeded) { succeeded in
+            if succeeded { dismiss() }
+        }
+        .onDisappear { wirelessTask?.cancel() }
+    }
+
+    private var qrImage: NSImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data("WIFI:T:ADB;S:\(qrServiceName);P:\(qrSecret);;".utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
+        guard let cgImage = CIContext().createCGImage(scaled, from: scaled.extent) else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: 256, height: 256))
+    }
+}
 
 struct PathNavigatorView: View {
     let path: String
@@ -81,7 +218,7 @@ struct OnboardingView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Label("Android cihazınızı bağlayın", systemImage: "cable.connector").font(.title2.bold())
-                Text("FileFlyfer, telefonunuza ek uygulama kurmadan ADB üzerinden çalışır.").foregroundStyle(.secondary)
+                Text("FileFlyfer, telefonunuza ek uygulama kurmadan ADB üzerinden çalışır. USB veya kablosuz bağlantı kullanabilirsiniz.").foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 10) {
                     instruction(1, "Android telefonda Ayarlar'ı açın.")
                     instruction(2, "Telefon Hakkında bölümüne girin.")
@@ -90,6 +227,13 @@ struct OnboardingView: View {
                     instruction(5, "USB Hata Ayıklama'yı etkinleştirin.")
                     instruction(6, "Telefonu veri aktarımını destekleyen bir USB kabloyla Mac'e bağlayın.")
                     instruction(7, "Telefonda görünen “Bu bilgisayara izin ver” penceresini onaylayın.")
+                }
+                GroupBox("Kablosuz bağlanma") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Android 11 veya sonrası: Geliştirici Seçenekleri → Kablosuz hata ayıklama'yı açın, ardından üstteki Kablosuz Bağlan düğmesinden QR kodu okutun.")
+                            .fixedSize(horizontal: false, vertical: true)
+                        Label("Telefon ve Mac aynı Wi-Fi ağına bağlı olmalı.", systemImage: "wifi")
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
                 }
                 GroupBox("Bağlantı sorunu mu var?") {
                     VStack(alignment: .leading, spacing: 7) {
@@ -151,13 +295,15 @@ struct TransferQueueView: View {
                             status(item.status)
                             VStack(alignment: .leading) {
                                 Text(item.fileName).lineLimit(1)
+                                Label(item.deviceName, systemImage: item.deviceID.contains(":") || item.deviceID.contains("_adb-tls-connect._tcp") ? "wifi" : "cable.connector")
+                                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                                 Text(item.errorMessage ?? statusText(item.status)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                        }.frame(width: 240, alignment: .leading).padding(8).background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
+                            }.frame(maxHeight: .infinity, alignment: .center)
+                        }.frame(width: 260, alignment: .leading).padding(8).background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
                     }
                 }.padding(.horizontal, 10).padding(.bottom, 10)
-            }.frame(height: 58)
-        }.frame(height: 104)
+            }.frame(height: 72)
+        }.frame(height: 118)
     }
     @ViewBuilder private func status(_ value: TransferStatus) -> some View {
         if value == .running { ProgressView().controlSize(.small) }

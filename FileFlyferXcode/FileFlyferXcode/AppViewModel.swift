@@ -16,6 +16,10 @@ final class AppViewModel: ObservableObject {
     @Published var selectedFileIDs = Set<RemoteFile.ID>()
     @Published var transfers: [TransferItem] = []
     @Published var isLoading = false
+    @Published var isWirelessActionRunning = false
+    @Published var isQRWirelessActionRunning = false
+    @Published var wirelessConnectionSucceeded = false
+    @Published var wirelessMessage: String?
     @Published var error: AppError?
     @Published var technicalError: String?
     @Published var conflict: TransferConflict?
@@ -40,7 +44,9 @@ final class AppViewModel: ObservableObject {
     func start() {
         guard monitoringTask == nil else { return }
         monitoringTask = Task { [weak self] in
-            await self?.refreshDevices()
+            // Startup discovery is background work. Keep transient ADB setup
+            // issues out of the user's way; manual refresh still reports errors.
+            await self?.refreshDevices(silent: true)
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3))
                 guard !Task.isCancelled else { break }
@@ -50,6 +56,66 @@ final class AppViewModel: ObservableObject {
     }
 
     func stop() { monitoringTask?.cancel(); monitoringTask = nil }
+
+    func pairWireless(address: String, pairingCode: String) async {
+        guard !isWirelessActionRunning else { return }
+        isWirelessActionRunning = true
+        defer { isWirelessActionRunning = false }
+        do {
+            try await service.pairWireless(address: address, pairingCode: pairingCode)
+            wirelessMessage = String(localized: "Eşleştirme tamamlandı. Şimdi cihaz bağlantı adresini girin.")
+        } catch {
+            wirelessMessage = Task.isCancelled || (error as? AppError) == .cancelled
+                ? String(localized: "Kablosuz bağlantı iptal edildi.")
+                : error.localizedDescription
+        }
+    }
+
+    func connectWireless(address: String) async {
+        guard !isWirelessActionRunning else { return }
+        isWirelessActionRunning = true
+        wirelessConnectionSucceeded = false
+        defer { isWirelessActionRunning = false }
+        do {
+            try await service.connectWireless(address: address)
+            wirelessMessage = String(localized: "Bağlantı kuruldu. Cihaz listesi yenileniyor…")
+            await refreshDevices()
+            wirelessConnectionSucceeded = true
+        } catch { wirelessMessage = error.localizedDescription }
+    }
+
+    func disconnectWireless(address: String) async {
+        guard !isWirelessActionRunning else { return }
+        isWirelessActionRunning = true
+        defer { isWirelessActionRunning = false }
+        do {
+            try await service.disconnectWireless(address: address)
+            wirelessMessage = String(localized: "Kablosuz bağlantı kesildi.")
+            await refreshDevices()
+        } catch { wirelessMessage = error.localizedDescription }
+    }
+
+    func pairAndConnectWirelessQR(serviceName: String, secret: String) async {
+        guard !isWirelessActionRunning else { return }
+        isWirelessActionRunning = true
+        isQRWirelessActionRunning = true
+        wirelessConnectionSucceeded = false
+        wirelessMessage = String(localized: "Telefonun QR kodu taraması bekleniyor…")
+        defer {
+            isWirelessActionRunning = false
+            isQRWirelessActionRunning = false
+        }
+        do {
+            try await service.pairAndConnectWirelessQR(serviceName: serviceName, secret: secret)
+            wirelessMessage = String(localized: "Eşleştirme tamamlandı ve telefon bağlandı.")
+            await refreshDevices()
+            wirelessConnectionSucceeded = true
+        } catch {
+            wirelessMessage = Task.isCancelled || (error as? AppError) == .cancelled
+                ? String(localized: "Kablosuz bağlantı iptal edildi.")
+                : error.localizedDescription
+        }
+    }
 
     func refreshDevices(silent: Bool = false) async {
         if !silent { isLoading = true }
@@ -183,37 +249,43 @@ final class AppViewModel: ObservableObject {
 
     func loadFiles() async {
         guard let device = selectedDevice, device.state == .device else { return }
+        let requestedPath = currentPath
         isLoading = true
         defer { isLoading = false }
         do {
-            files = try await service.list(path: currentPath, device: device)
-            loadedLocationKey = "\(device.id):\(currentPath)"
+            let loadedFiles = try await service.list(path: requestedPath, device: device)
+            guard selectedDeviceID == device.id, currentPath == requestedPath else { return }
+            files = loadedFiles
+            loadedLocationKey = "\(device.id):\(requestedPath)"
             selectedFileIDs.removeAll()
-        } catch { present(error) }
+        } catch {
+            guard selectedDeviceID == device.id, currentPath == requestedPath else { return }
+            present(error)
+        }
     }
 
     func upload(_ urls: [URL]) {
         guard let device = selectedDevice else { return }
         for url in urls {
             guard let remote = try? ShellEscaper.join(currentPath, url.lastPathComponent) else { continue }
-            let item = TransferItem(source: url.path, destination: remote, fileName: url.lastPathComponent, direction: .upload)
+            let item = TransferItem(source: url.path, destination: remote, fileName: url.lastPathComponent, deviceID: device.id, deviceName: device.displayName, direction: .upload)
             if files.contains(where: { $0.name == url.lastPathComponent }) { pendingConflicts.append(.init(item: item)) }
             else { transfers.append(item) }
         }
         showNextConflict()
-        processQueue(device: device)
+        processQueue()
     }
 
     func downloadSelected(to directory: URL) {
         guard let device = selectedDevice else { return }
         for file in selectedFiles where !file.isDirectory {
             let local = directory.appendingPathComponent(file.name)
-            let item = TransferItem(source: file.path, destination: local.path, fileName: file.name, direction: .download)
+            let item = TransferItem(source: file.path, destination: local.path, fileName: file.name, deviceID: device.id, deviceName: device.displayName, direction: .download)
             if FileManager.default.fileExists(atPath: local.path) { pendingConflicts.append(.init(item: item)) }
             else { transfers.append(item) }
         }
         showNextConflict()
-        processQueue(device: device)
+        processQueue()
     }
 
     func resolveConflict(overwrite: Bool, useNewName: Bool = false) {
@@ -227,7 +299,7 @@ final class AppViewModel: ObservableObject {
         }
         self.conflict = nil
         showNextConflict()
-        if let device = selectedDevice { processQueue(device: device) }
+        processQueue()
     }
 
     func cancelTransfer() {
@@ -255,7 +327,7 @@ final class AppViewModel: ObservableObject {
         } catch { present(error) }
     }
 
-    private func processQueue(device: AndroidDevice) {
+    private func processQueue() {
         guard transferTask == nil else { return }
         transferTask = Task { [weak self] in
             guard let self else { return }
@@ -264,6 +336,9 @@ final class AppViewModel: ObservableObject {
                 self.transfers[index].startedAt = Date()
                 do {
                     let item = self.transfers[index]
+                    guard let device = self.devices.first(where: { $0.id == item.deviceID }), device.state == .device else {
+                        throw AppError.disconnected
+                    }
                     if item.direction == .upload {
                         try await self.service.push(local: URL(fileURLWithPath: item.source), remote: item.destination, device: device)
                     } else {
@@ -304,6 +379,6 @@ final class AppViewModel: ObservableObject {
         } else {
             destination = URL(fileURLWithPath: item.destination).deletingLastPathComponent().appendingPathComponent(copyName).path
         }
-        return TransferItem(source: item.source, destination: destination, fileName: copyName, direction: item.direction)
+        return TransferItem(source: item.source, destination: destination, fileName: copyName, deviceID: item.deviceID, deviceName: item.deviceName, direction: item.direction)
     }
 }
